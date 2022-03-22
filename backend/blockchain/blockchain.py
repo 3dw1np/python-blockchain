@@ -1,6 +1,8 @@
 from backend.blockchain.block import Block
+from backend.tests.blockchain.test_block import block
 from backend.wallet.transaction import Transaction
 from backend.config import MINING_REWARD_INPUT
+from backend.wallet.wallet import Wallet
 
 
 class Blockchain:
@@ -68,6 +70,8 @@ class Blockchain:
             last_block = chain[i - 1]
             Block.is_valid_block(last_block, block)
 
+        Blockchain.is_valid_transaction_chain(chain)
+
     @staticmethod
     def is_valid_transaction_chain(chain):
         """
@@ -78,11 +82,16 @@ class Blockchain:
         """
         transaction_ids = set()
 
-        for block in chain:
+        for i in range(len(chain)):
+            block = chain[i]
             has_mining_reward = False
 
             for transaction_json in block.data:
                 transaction = Transaction.from_json(transaction_json)
+                if transaction.id in transaction_ids:
+                    raise Exception(f'Transaction {transaction.id} is not unique')
+
+                transaction_ids.add(transaction.id)
 
                 if transaction.input == MINING_REWARD_INPUT:
                     if has_mining_reward:
@@ -92,11 +101,16 @@ class Blockchain:
                         )
 
                     has_mining_reward = True
+                else:
+                    historic_blockchain = Blockchain()
+                    historic_blockchain.chain = chain[0:i]
+                    historic_balance = Wallet.calculate_balance(
+                        historic_blockchain,
+                        transaction.input['address']
+                    )
 
-                if transaction.id in transaction_ids:
-                    raise Exception(f'Transaction {transaction.id} is not unique')
-
-                transaction_ids.add(transaction.id)
+                    if historic_balance != transaction.input['amount']:
+                        raise Exception(f'Transaction {transaction.id} has an invalid input amount')
 
                 Transaction.is_valid_transaction(transaction)
 
